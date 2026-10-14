@@ -14,6 +14,20 @@ from src.classification.methods.focal import FocalLossModule
 from src.classification.models import TransformerHeadClassifier
 from src.config_loader import ConfigError
 
+"""classification 모델/optimizer/scheduler를 조립하는 빌더 모듈.
+
+이 파일은 method 구현이 아니라, 실제 실험의 도구적 구성 로직을 담당한다.
+
+역할:
+- backbone과 head를 조합해 모델을 만든다.
+- 사전학습 체크포인트를 로드한다.
+- optimizer와 scheduler를 만든다.
+- ArcFace 전용 optimizer 파라미터 그룹을 다룬다.
+
+즉, method 파일들은 loss/metric 로직을 정의하고,
+이 파일은 그 method가 실험에서 쓸 수 있도록 실제 객체를 생성하는 역할을 한다.
+"""
+
 
 def build_model(cfg: Mapping[str, Any]) -> nn.Module:
     model_cfg = _section(cfg, "model")

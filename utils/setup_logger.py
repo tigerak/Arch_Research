@@ -3,6 +3,20 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+"""실험 실행용 로거를 생성하는 보조 모듈.
+
+이 파일은 실제 알고리즘 구현이 아니라,
+학습/평가 실행 중 발생하는 로그를 파일과 콘솔에 동시에 남기기 위한 운영 유틸이다.
+
+핵심 역할:
+- 동일 logger 이름의 중복 핸들러를 방지한다.
+- log 파일 경로를 자동으로 생성한다.
+- 콘솔 출력과 파일 저장을 동시에 보장한다.
+
+이 모듈은 실험 코드 자체가 아니라 실험이 잘 보이도록 도와주는 환경 지원 코드로서,
+utils 영역에 위치하는 것이 적절하다.
+"""
+
 
 def get_file_logger(logger_name: str, log_file: str | Path, level: int = logging.INFO) -> logging.Logger:
 	"""파일 로그를 남기는 로거를 생성한다.

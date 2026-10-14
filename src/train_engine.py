@@ -11,6 +11,20 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+"""classification 학습 엔진의 핵심 구현 모듈.
+
+이 파일은 실제 학습 루프를 구성하는 가장 중요한 위치이다.
+
+역할:
+- cfg를 읽어 모델, 손실, 옵티마이저, 스케줄러를 생성한다.
+- train/valid 데이터로더를 준비한다.
+- epoch 단위 학습 루프를 실행한다.
+- 기준 metric 기반 체크포인트 저장을 결정한다.
+- confusion matrix, history, checkpoint 경로를 함께 관리한다.
+
+실험 포털에서 classification task의 실제 실행 중심이 이 파일에 모여 있다.
+"""
+
 try:
     from tqdm.auto import tqdm
 except Exception:

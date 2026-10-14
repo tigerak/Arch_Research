@@ -1,4 +1,7 @@
 /configs/
 /IMG_DATA/
 /models/
-/__pycache__/
+
+**/__pycache__/
+*.pyc
+.*

@@ -9,6 +9,21 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 import torch
 import yaml
 
+"""실험 포털의 공통 스케줄러 및 요약 관리자.
+
+이 파일은 "실제로 무엇을 실행할지"를 결정하는 상위 오케스트레이터 역할을 한다.
+
+핵심 기능:
+- schedule key 목록을 읽어 하나씩 실행한다.
+- base config와 custom config를 병합한다.
+- task type(classification/anomaly)을 확인한다.
+- 각 task 엔진을 호출한다.
+- 최종 성공/실패 결과를 요약 CSV와 콘솔 테이블로 저장한다.
+
+간단히 말하면, 이 파일은 실험실의 관리자이며
+하위 모듈인 train_engine/eval_engine/anomaly.engine을 조율하는 중앙 제어장치이다.
+"""
+
 from src.anomaly.engine import run_anomaly_eval, run_anomaly_train
 from src.classification.engine import run_classification_eval, run_classification_train
 from src.config_loader import ConfigError, get_task_type, load_yaml_file, merge_base_and_custom

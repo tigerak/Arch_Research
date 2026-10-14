@@ -4,6 +4,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+"""classification task용 커스텀 모델 정의 모듈.
+
+이 파일에는 실제 backbone을 감싸는 classification head 모델들이 정의된다.
+
+주요 구성:
+- TransformerHeadClassifier: ViT/DINO 계열 토큰 특성을 후처리하는 head
+- SupConModel: contrastive supervision용 부가 모델
+
+이 구조는 단순히 timm 모델 하나를 쓰는 것이 아니라,
+토큰 융합, metric projection, classifier head까지 구성하기 위해 별도 모델 클래스로 분리한 것에 의미가 있다.
+"""
+
 
 class TransformerHeadClassifier(nn.Module):
     def __init__(self, backbone, args, num_layers: int = 2):

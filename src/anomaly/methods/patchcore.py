@@ -18,9 +18,28 @@ from src.anomaly.patchcore import (
 )
 from src.config_loader import ConfigError
 
+"""PatchCore anomaly method 구현.
+
+이 파일은 anomaly task의 첫 번째 baseline method이다.
+
+동작 방식:
+- 정상 이미지들로부터 feature embedding을 수집한다.
+- memory bank를 구성한다.
+- 테스트 이미지에 대해 각 patch feature의 거리 기반 anomaly score를 계산한다.
+- anomaly threshold를 정하고 AUROC/PR/AUPRC/accuracy를 산출한다.
+
+이 구현은 "사전 학습된 백본 + 정상 샘플 메모리 뱅크" 방식으로 동작하므로,
+다른 anomaly method가 추가될 때에도 같은 구조를 따라 확장할 수 있다.
+"""
+
 
 def run_patchcore(cfg: Mapping[str, Any], *, save_artifacts: bool = True) -> Dict[str, Any]:
-    """PatchCore baseline을 학습하고 평가한다."""
+    """PatchCore baseline을 학습하고 평가한다.
+
+    학습 단계에서는 정상 이미지 임베딩을 수집하고
+    memory bank를 만들고,
+    평가 단계에서는 각 테스트 샘플의 anomaly score를 계산한다.
+    """
     started = perf_counter()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

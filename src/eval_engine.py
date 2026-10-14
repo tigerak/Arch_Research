@@ -9,6 +9,20 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+"""classification 평가 엔진 모듈.
+
+이 파일은 모델이 학습된 뒤 어떤 성능을 보이는지를 정량적으로 검증하는 역할을 담당한다.
+
+핵심 흐름:
+1. cfg와 체크포인트를 기반으로 모델을 다시 구성한다.
+2. 검증 데이터로더를 통해 추론을 수행한다.
+3. confusion matrix와 per-class metric을 계산한다.
+4. 결과를 콘솔과 구조화된 dict 형태로 반환한다.
+
+평가가 단순 print만 수행하는 것이 아니라
+결과를 그대로 run_manager와 후속 분석 파이프라인에서 재사용할 수 있게 구성한 점이 중요하다.
+"""
+
 try:
     from tqdm.auto import tqdm
 except Exception:

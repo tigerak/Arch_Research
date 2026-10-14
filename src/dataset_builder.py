@@ -15,6 +15,20 @@ from torchvision.transforms.functional import InterpolationMode
 
 from src.config_loader import ConfigError
 
+"""이미지 데이터셋 변환과 DataLoader 생성 모듈.
+
+이 파일은 실험에 필요한 입력 파이프라인을 모두 책임진다.
+
+핵심 역할:
+- grayscale 이미지를 RGB로 통일
+- train/eval용 augmentation 분리
+- ImageFolder 기반 DataLoader 생성
+- 클래스 이름과 인덱스의 일관성 검증
+
+즉, 모델 자체보다는 데이터를 모델에 공급하기 전의 정제/표준화 단계에 속하는 코드이므로,
+실험의 재현성과 안정성을 높이는 위치에 놓여 있다.
+"""
+
 try:
     import cv2  # type: ignore
 except Exception:

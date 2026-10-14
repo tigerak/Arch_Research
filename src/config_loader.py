@@ -5,6 +5,20 @@ from typing import Any, Dict, Iterable, Mapping, Optional
 
 import yaml
 
+"""실험 설정 로딩, 병합, 검증을 담당하는 공통 설정 모듈.
+
+이 파일은 실험 포털의 핵심 입력 경로이다.
+
+역할:
+- YAML 파일을 읽어 dict로 변환한다.
+- base config와 custom config를 재귀적으로 병합한다.
+- task type(classification/anomaly_detection)을 판별한다.
+- 필수 키와 값 범위를 검증해 런타임 오류를 조기에 차단한다.
+
+모든 실험은 이 모듈에서 만들어진 cfg를 기준으로 동작하므로,
+설정 검증이 약하면 어떤 실험이든 예상치 못한 실패를 일으킬 수 있다.
+"""
+
 
 class ConfigError(ValueError):
     """설정 파일 처리 단계에서 발생하는 예외를 구조적으로 표현하는 클래스.
