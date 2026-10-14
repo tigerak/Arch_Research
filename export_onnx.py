@@ -10,10 +10,10 @@ import torch
 import torch.nn as nn
 from torch.onnx import errors as onnx_errors
 
+from src.classification.methods.arcface import SubCenterArcFace
+from src.classification.registry import build_loss, build_model
 from src.config_loader import ConfigError, load_yaml_file
 from src.dataset_builder import build_eval_loader
-from src.losses import SubCenterArcFace
-from src.registry import build_loss, build_model
 
 
 CONFIG = {

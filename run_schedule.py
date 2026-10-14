@@ -15,12 +15,13 @@ SCHEDULE = [
 # 파일 실행 전 확인.
 RUN_MODE = "train"  # "train" | "eval"
 
-# 방법 1) task 이름만 지정하면 자동으로 아래 경로를 사용한다.
-# - base:   configs/<TASK_NAME>/base_config.yaml
-# - custom: configs/<TASK_NAME>/*.yaml
+# 방법 1) config group + task 이름만 지정하면 자동으로 아래 경로를 사용한다.
+# - base:   configs/<CONFIG_GROUP>/<TASK_NAME>/base_config.yaml
+# - custom: configs/<CONFIG_GROUP>/<TASK_NAME>/*.yaml
+CONFIG_GROUP = "classifier"  # "classifier" | "anomaly"
 TASK_NAME = "TAPING_DiNO"
 # 방법 2) base config를 직접 지정한다. (지정 시 TASK_NAME보다 우선)
-BASE_CONFIG_PATH = None # Path("configs/TAPING_DiNO/base_config.yaml")
+BASE_CONFIG_PATH = None  # Path("configs/classifier/TAPING_DiNO/base_config.yaml")
 
 # custom 설정 디렉터리 강제 지정(보통 None 권장)
 # None이면 BASE_CONFIG_PATH의 부모 폴더를 사용한다.
@@ -36,10 +37,13 @@ def _resolve_paths() -> tuple[Path, Path]:
     우선순위:
     1) 환경변수 TAPING_BASE_CONFIG
     2) 코드 상수 BASE_CONFIG_PATH
-    3) 환경변수 TAPING_TASK_NAME
-    4) 코드 상수 TASK_NAME
+    3) 환경변수 TAPING_CONFIG_GROUP
+    4) 코드 상수 CONFIG_GROUP
+    5) 환경변수 TAPING_TASK_NAME
+    6) 코드 상수 TASK_NAME
     """
     env_base = os.getenv("TAPING_BASE_CONFIG", "").strip()
+    env_group = os.getenv("TAPING_CONFIG_GROUP", "").strip()
     env_task = os.getenv("TAPING_TASK_NAME", "").strip()
 
     if env_base:
@@ -47,8 +51,9 @@ def _resolve_paths() -> tuple[Path, Path]:
     elif BASE_CONFIG_PATH is not None:
         base = Path(BASE_CONFIG_PATH)
     else:
+        config_group = env_group or str(CONFIG_GROUP)
         task = env_task or str(TASK_NAME)
-        base = Path("configs") / task / "base_config.yaml"
+        base = Path("configs") / config_group / task / "base_config.yaml"
 
     if CONFIGS_DIR is not None:
         cfg_dir = Path(CONFIGS_DIR)

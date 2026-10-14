@@ -197,40 +197,135 @@ def validate_merged_config(cfg: Mapping[str, Any]) -> None:
     - labels 길이와 n_classes 정합성
     - scheduler 허용 값 검증
     """
-    required_top = ("project_name", "data", "model", "train")
+    required_top = ("project_name", "data", "model")
     _require_keys(cfg, required_top, where="root")
 
+    task_type = get_task_type(cfg)
     data = _ensure_mapping(cfg["data"], "data")
     model = _ensure_mapping(cfg["model"], "model")
-    train = _ensure_mapping(cfg["train"], "train")
+    train = _ensure_mapping(cfg["train"], "train") if "train" in cfg else {}
 
-    _require_keys(data, ("train_dir", "test_dir", "save_dir", "model_dir"), where="data")
-    _require_keys(model, ("model_name", "pretrained", "freeze_backbone"), where="model")
-    _require_keys(
-        train,
-        ("max_epoch", "lr", "scheduler", "weight_decay", "n_classes", "labels"),
-        where="train",
+    if task_type == "classification":
+        if "train" not in cfg:
+            raise ConfigError("classification config requires train section", field="train")
+
+        _require_keys(data, ("train_dir", "test_dir", "save_dir", "model_dir"), where="data")
+        _require_keys(model, ("model_name", "pretrained", "freeze_backbone"), where="model")
+        _require_keys(
+            train,
+            ("max_epoch", "lr", "scheduler", "weight_decay", "n_classes", "labels"),
+            where="train",
+        )
+
+        _validate_loss_config(train)
+
+        n_classes = int(train["n_classes"])
+        labels = train["labels"]
+        if not isinstance(labels, list):
+            raise ConfigError("train.labels must be a list", field="train.labels")
+        if len(labels) != n_classes:
+            raise ConfigError(
+                "train.labels length must match train.n_classes",
+                field="train.labels/train.n_classes",
+                details={"labels_len": len(labels), "n_classes": n_classes},
+            )
+
+        scheduler = str(train["scheduler"]).strip()
+        if not scheduler:
+            raise ConfigError(
+                "train.scheduler must not be empty",
+                field="train.scheduler",
+            )
+        return
+
+    if task_type == "anomaly_detection":
+        _validate_anomaly_config(cfg, data=data, model=model, train=train)
+        return
+
+    raise ConfigError(
+        "Unsupported task type",
+        field="task.type",
+        details={"value": task_type, "supported": ["classification", "anomaly_detection"]},
     )
 
-    _validate_loss_config(train)
 
-    n_classes = int(train["n_classes"])
-    labels = train["labels"]
-    if not isinstance(labels, list):
-        raise ConfigError("train.labels must be a list", field="train.labels")
-    if len(labels) != n_classes:
+def get_task_type(cfg: Mapping[str, Any]) -> str:
+    task = cfg.get("task")
+    if task is None:
+        return "classification"
+    task_map = _ensure_mapping(task, "task")
+    task_type = str(task_map.get("type", task_map.get("task_type", "classification"))).strip().lower()
+    if task_type in {"classification", "cls", "classifier"}:
+        return "classification"
+    if task_type in {"anomaly_detection", "anomaly", "ad"}:
+        return "anomaly_detection"
+    return task_type
+
+
+def _validate_anomaly_config(
+    cfg: Mapping[str, Any],
+    *,
+    data: Mapping[str, Any],
+    model: Mapping[str, Any],
+    train: Mapping[str, Any],
+) -> None:
+    """이상치 탐지 설정의 핵심 키를 검증한다.
+
+    1단계 목적은 PatchCore 기반 baseline을 안정적으로 돌릴 수 있는 최소 계약을
+    정의하는 것이다. classification 전용 필드(n_classes, labels, scheduler 등)는
+    여기서 강제하지 않는다.
+    """
+    _require_keys(data, ("train_normal_dir", "test_dir", "save_dir", "model_dir"), where="data")
+
+    if not any(key in model for key in ("backbone_name", "model_name")):
         raise ConfigError(
-            "train.labels length must match train.n_classes",
-            field="train.labels/train.n_classes",
-            details={"labels_len": len(labels), "n_classes": n_classes},
+            "anomaly config requires backbone_name or model_name",
+            field="model.backbone_name/model.model_name",
+        )
+    _require_keys(model, ("pretrained", "freeze_backbone"), where="model")
+
+    _require_keys(cfg, ("anomaly",), where="root")
+    anomaly = _ensure_mapping(cfg["anomaly"], "anomaly")
+    _require_keys(anomaly, ("method_name",), where="anomaly")
+
+    method_name = str(anomaly["method_name"]).strip().lower()
+    if method_name == "patchcore":
+        _require_keys(
+            anomaly,
+            ("feature_layers", "coreset_sampling_ratio", "knn_k"),
+            where="anomaly",
         )
 
-    scheduler = str(train["scheduler"]).strip()
-    if not scheduler:
-        raise ConfigError(
-            "train.scheduler must not be empty",
-            field="train.scheduler",
-        )
+        feature_layers = anomaly["feature_layers"]
+        if not isinstance(feature_layers, list) or not feature_layers:
+            raise ConfigError(
+                "anomaly.feature_layers must be a non-empty list",
+                field="anomaly.feature_layers",
+            )
+
+        coreset_sampling_ratio = float(anomaly["coreset_sampling_ratio"])
+        knn_k = int(anomaly["knn_k"])
+        if not (0.0 < coreset_sampling_ratio <= 1.0):
+            raise ConfigError(
+                "anomaly.coreset_sampling_ratio must be in (0, 1]",
+                field="anomaly.coreset_sampling_ratio",
+                details={"value": coreset_sampling_ratio},
+            )
+        if knn_k <= 0:
+            raise ConfigError(
+                "anomaly.knn_k must be > 0",
+                field="anomaly.knn_k",
+                details={"value": knn_k},
+            )
+
+    if train:
+        for key in ("img_size", "batch_size", "num_workers", "seed"):
+            if key not in train:
+                raise ConfigError(
+                    "anomaly config requires runtime settings in train section",
+                    field=f"train.{key}",
+                    details={"required_keys": ["img_size", "batch_size", "num_workers", "seed"]},
+                )
 
 
 def _validate_loss_config(train: Mapping[str, Any]) -> None:

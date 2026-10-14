@@ -9,10 +9,10 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 import torch
 import yaml
 
-from src.config_loader import ConfigError, load_yaml_file, merge_base_and_custom
-from src.eval_engine import evaluate_checkpoint
+from src.anomaly.engine import run_anomaly_eval, run_anomaly_train
+from src.classification.engine import run_classification_eval, run_classification_train
+from src.config_loader import ConfigError, get_task_type, load_yaml_file, merge_base_and_custom
 from src.experiment_resolver import resolve_experiment_config_path
-from src.train_engine import train_one_experiment
 from utils.setup_logger import get_file_logger
 
 
@@ -83,6 +83,7 @@ def run_experiments(
             run_root.mkdir(parents=True, exist_ok=True)
             run_root_for_summary = run_root
             today_project_name_for_summary = today_project_name
+            task_type = get_task_type(cfg)
 
             # run_manager 로그는 각 실험 폴더 안에 저장한다.
             logger = get_file_logger(
@@ -91,6 +92,7 @@ def run_experiments(
             )
             logger.info("Run started")
             logger.info("mode=%s", mode_l)
+            logger.info("task_type=%s", task_type)
 
             logger.info("[%s] custom=%s", key_str, custom_path)
             logger.info("[%s] task_name=%s", key_str, task_name)
@@ -101,46 +103,25 @@ def run_experiments(
             merged_cfg_path = save_merged_config(cfg, config_project_name=config_project_name)
             logger.info("[%s] Config=%s", key_str, merged_cfg_path)
 
-            if mode_l == "train":
-                run_result = train_one_experiment(cfg, logger=logger)
-                best_metric_name, best_metric_value = _extract_best_score_from_checkpoint(
-                    run_result.get("best_checkpoint")
-                )
-
-                record = {
-                    "order": order,
-                    "schedule_key": key_str,
-                    "status": "SUCCESS",
-                    "mode": mode_l,
-                    "project_name": str(cfg.get("project_name", "")),
-                    "custom_config_path": str(custom_path),
-                    "merged_config_path": str(merged_cfg_path),
-                    "best_metric": best_metric_name,
-                    "best_score": best_metric_value,
-                    "checkpoint_path": str(run_result.get("best_checkpoint", "")),
-                    "save_root": str(run_result.get("save_root", "")),
-                    "error": "",
-                    "duration_sec": round(perf_counter() - started, 3),
-                }
-                logger.info("[%s] SUCCESS | best_metric=%s | best_score=%s", key_str, best_metric_name, best_metric_value)
-            else:
-                eval_result = evaluate_checkpoint(cfg)
-                record = {
-                    "order": order,
-                    "schedule_key": key_str,
-                    "status": "SUCCESS",
-                    "mode": mode_l,
-                    "project_name": str(cfg.get("project_name", "")),
-                    "custom_config_path": str(custom_path),
-                    "merged_config_path": str(merged_cfg_path),
-                    "best_metric": "macro_f1",
-                    "best_score": float(eval_result.get("macro_f1", 0.0)),
-                    "checkpoint_path": str(eval_result.get("checkpoint_path", "")),
-                    "save_root": str(Path(str(cfg["data"]["save_dir"])) / str(cfg.get("project_name", ""))),
-                    "error": "",
-                    "duration_sec": round(perf_counter() - started, 3),
-                }
-                logger.info("[%s] SUCCESS | macro_f1=%s", key_str, eval_result.get("macro_f1", 0.0))
+            run_result = _dispatch_task_run(cfg, mode=mode_l, logger=logger)
+            record = _build_success_record(
+                order=order,
+                schedule_key=key_str,
+                mode=mode_l,
+                task_type=task_type,
+                cfg=cfg,
+                custom_path=custom_path,
+                merged_cfg_path=merged_cfg_path,
+                run_result=run_result,
+                started=started,
+            )
+            logger.info(
+                "[%s] SUCCESS | task_type=%s | best_metric=%s | best_score=%s",
+                key_str,
+                task_type,
+                record["best_metric"],
+                record["best_score"],
+            )
 
             records.append(record)
 
@@ -150,6 +131,7 @@ def run_experiments(
                 "order": order,
                 "schedule_key": key_str,
                 "status": "FAILED",
+                "task_type": "",
                 "mode": mode_l,
                 "project_name": "",
                 "custom_config_path": "",
@@ -228,6 +210,7 @@ def save_summary_csv(records: List[Dict[str, Any]], *, run_root: Path, today_pro
         "order",
         "schedule_key",
         "status",
+        "task_type",
         "mode",
         "project_name",
         "custom_config_path",
@@ -271,7 +254,7 @@ def print_summary_table(records: List[Dict[str, Any]]) -> None:
         print("[RunManager] No records")
         return
 
-    headers = ["#", "key", "status", "best(metric)", "best(score)", "save_root", "sec"]
+    headers = ["#", "key", "task", "status", "best(metric)", "best(score)", "save_root", "sec"]
     rows: List[List[str]] = []
 
     for r in records:
@@ -286,6 +269,7 @@ def print_summary_table(records: List[Dict[str, Any]]) -> None:
             [
                 str(r.get("order", "")),
                 str(r.get("schedule_key", "")),
+                str(r.get("task_type", "")),
                 str(r.get("status", "")),
                 best_metric,
                 best_score_text,
@@ -358,3 +342,93 @@ def _extract_best_score_from_checkpoint(checkpoint_path: Optional[str]) -> tuple
             return metric_name, float("nan")
 
     return metric_name, float("nan")
+
+
+def _dispatch_task_run(cfg: Mapping[str, Any], *, mode: str, logger) -> Dict[str, Any]:
+    task_type = get_task_type(cfg)
+
+    if task_type == "classification":
+        if mode == "train":
+            return run_classification_train(cfg, logger=logger)
+        if mode == "eval":
+            return run_classification_eval(cfg)
+
+    if task_type == "anomaly_detection":
+        if mode == "train":
+            return run_anomaly_train(cfg)
+        if mode == "eval":
+            return run_anomaly_eval(cfg)
+
+    raise ConfigError(
+        "Unsupported task/mode combination",
+        field="task.type/mode",
+        details={"task_type": task_type, "mode": mode},
+    )
+
+
+def _build_success_record(
+    *,
+    order: int,
+    schedule_key: str,
+    mode: str,
+    task_type: str,
+    cfg: Mapping[str, Any],
+    custom_path: Path,
+    merged_cfg_path: Path,
+    run_result: Mapping[str, Any],
+    started: float,
+) -> Dict[str, Any]:
+    best_metric, best_score, checkpoint_path, save_root = _extract_result_summary(
+        task_type=task_type,
+        mode=mode,
+        cfg=cfg,
+        run_result=run_result,
+    )
+
+    return {
+        "order": order,
+        "schedule_key": schedule_key,
+        "status": "SUCCESS",
+        "task_type": task_type,
+        "mode": mode,
+        "project_name": str(cfg.get("project_name", "")),
+        "custom_config_path": str(custom_path),
+        "merged_config_path": str(merged_cfg_path),
+        "best_metric": best_metric,
+        "best_score": best_score,
+        "checkpoint_path": checkpoint_path,
+        "save_root": save_root,
+        "error": "",
+        "duration_sec": round(perf_counter() - started, 3),
+    }
+
+
+def _extract_result_summary(
+    *,
+    task_type: str,
+    mode: str,
+    cfg: Mapping[str, Any],
+    run_result: Mapping[str, Any],
+) -> tuple[str, float, str, str]:
+    if task_type == "classification":
+        if mode == "train":
+            checkpoint_path = str(run_result.get("best_checkpoint", ""))
+            best_metric_name, best_metric_value = _extract_best_score_from_checkpoint(checkpoint_path)
+            save_root = str(run_result.get("save_root", ""))
+            return best_metric_name, best_metric_value, checkpoint_path, save_root
+
+        checkpoint_path = str(run_result.get("checkpoint_path", ""))
+        save_root = str(Path(str(cfg["data"]["save_dir"])) / str(cfg.get("project_name", "")))
+        return "macro_f1", float(run_result.get("macro_f1", 0.0)), checkpoint_path, save_root
+
+    if task_type == "anomaly_detection":
+        best_metric = str(run_result.get("primary_metric", "image_auroc"))
+        best_score = float(run_result.get("primary_score", 0.0))
+        save_root = str(run_result.get("save_root", Path(str(cfg["data"]["save_dir"])) / str(cfg.get("project_name", ""))))
+        return best_metric, best_score, "", save_root
+
+    raise ConfigError(
+        "Unsupported task type in result summary",
+        field="task.type",
+        details={"task_type": task_type},
+    )

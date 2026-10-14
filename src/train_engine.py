@@ -16,10 +16,10 @@ try:
 except Exception:
     tqdm = None
 
+from src.classification.methods.arcface import SubCenterArcFace
+from src.classification.registry import build_arcface_optimizer, build_loss, build_model, build_optimizer, build_scheduler
 from src.config_loader import ConfigError
 from src.dataset_builder import build_train_val_loaders
-from src.losses import SubCenterArcFace
-from src.registry import build_arcface_optimizer, build_loss, build_model, build_optimizer, build_scheduler
 
 
 def train_one_experiment(cfg: Mapping[str, Any], logger: logging.Logger | None = None) -> Dict[str, Any]:

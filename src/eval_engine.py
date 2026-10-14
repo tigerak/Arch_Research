@@ -14,10 +14,10 @@ try:
 except Exception:
     tqdm = None
 
+from src.classification.methods.arcface import SubCenterArcFace
+from src.classification.registry import build_loss, build_model, load_arcface_state_if_present
 from src.config_loader import ConfigError
 from src.dataset_builder import build_eval_loader
-from src.losses import SubCenterArcFace
-from src.registry import build_loss, build_model, load_arcface_state_if_present
 
 
 def evaluate_checkpoint(
