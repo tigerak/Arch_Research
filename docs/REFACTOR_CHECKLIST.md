@@ -95,7 +95,13 @@
 
 - src/anomaly/engine.py
 - src/anomaly/registry.py
-- src/anomaly/methods/patchcore.py
+- src/anomaly/backbone_features.py
+- src/anomaly/image_loaders.py
+- src/anomaly/image_level_metrics.py
+- src/anomaly/methods/patchcore_runner.py
+- src/anomaly/methods/patchcore_components.py
+- src/anomaly/methods/dinomaly2_runner.py
+- src/anomaly/methods/dinomaly2_components.py
 
 이 파일들은 실제 알고리즘과 실험 실행 흐름을 담당하므로 절대로 utils로 밀어 넣어서는 안 된다.
 

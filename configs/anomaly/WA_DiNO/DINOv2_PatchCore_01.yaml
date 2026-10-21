@@ -1,0 +1,18 @@
+project_name: "PatchCore_DINOv2_01"
+
+method:
+  patchcore:
+    coreset_sampling_ratio: 0.1
+    knn_k: 9
+    score_aggregation: "max"
+
+train:
+  img_size: [518, 518]
+  batch_size: 128
+  num_workers: 24
+  persistent_workers: true
+  prefetch_factor: 1
+  seed: 42
+  # 
+  profile_transforms: false
+  profile_steps: false

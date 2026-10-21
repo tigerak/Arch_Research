@@ -1,0 +1,15 @@
+project_name: "Focal_A05"
+
+model:
+  token_fusion: "cls_only" # cls_only | attn | concat | wt_concat | sum05
+  
+train:
+  lr: 0.0005
+  weight_decay: 0.001
+  scheduler: "CosineAnnealingLR"
+  eta_min: 1.0e-06
+
+  # Focal loss 설정
+  loss_name: "focal"
+  focal_gamma: 2.0
+  focal_alpha: 0.5

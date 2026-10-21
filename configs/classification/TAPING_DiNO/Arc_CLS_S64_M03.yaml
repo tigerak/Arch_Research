@@ -1,0 +1,23 @@
+project_name: "Arc_CLS_S64_M03"
+
+model:
+  token_fusion: "cls_only" # cls_only | attn | concat | wt_concat | sum05
+  
+train:
+
+  # ArcFace loss 설정
+  loss_name: "arcface"
+
+  arcface_lr: 0.001
+  arcface_num_sub_centers: 4
+  arcface_margin: 0.3
+  arcface_scale: 64.0
+
+  arcface_prune_warmup_epochs: 20
+  arcface_prune_interval: 5
+  arcface_prune_min_usage: 2
+  arcface_prune_max_remove_per_class: 1
+
+  # ArcFace projection 실험 옵션 (metric naming)
+  use_metric_projection: False
+  metric_feature_dim: 384

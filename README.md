@@ -75,9 +75,14 @@ Arch_Research/
 │   ├── anomaly/
 │   │   ├── engine.py
 │   │   ├── registry.py
-│   │   ├── dataset.py
+│   │   ├── backbone_features.py
+│   │   ├── image_loaders.py
+│   │   ├── image_level_metrics.py
 │   │   └── methods/
-│   │       └── patchcore.py
+│   │       ├── patchcore_components.py
+│   │       ├── patchcore_runner.py
+│   │       ├── dinomaly2_components.py
+│   │       └── dinomaly2_runner.py
 │   └── common/
 │       └── checkpoint_utils.py
 ├── utils/
@@ -199,10 +204,12 @@ anomaly task는 `task.type=anomaly_detection`을 기준으로 동작합니다.
 
 - [src/anomaly/engine.py](src/anomaly/engine.py)
 - [src/anomaly/registry.py](src/anomaly/registry.py)
-- [src/anomaly/dataset.py](src/anomaly/dataset.py)
-- [src/anomaly/methods/patchcore.py](src/anomaly/methods/patchcore.py)
+- [src/anomaly/image_loaders.py](src/anomaly/image_loaders.py)
+- [src/anomaly/image_level_metrics.py](src/anomaly/image_level_metrics.py)
+- [src/anomaly/methods/patchcore_runner.py](src/anomaly/methods/patchcore_runner.py)
+- [src/anomaly/methods/dinomaly2_runner.py](src/anomaly/methods/dinomaly2_runner.py)
 
-현재 baseline method는 PatchCore이고, 구조가 registry 기반으로 확장되도록 설계되어 있습니다.
+현재 baseline method는 PatchCore이고, Dinomaly2 계열 student-teacher runner도 같은 registry 계약으로 확장되도록 설계되어 있습니다.
 
 ---
 
@@ -231,7 +238,7 @@ IMG_DATA/
             └── ...
 ```
 
-이 구조와 다르면 [src/anomaly/dataset.py](src/anomaly/dataset.py) 에서 `ImageFolder` 기반 데이터셋 로딩이 실패할 수 있습니다.
+이 구조와 다르면 [src/anomaly/image_loaders.py](src/anomaly/image_loaders.py) 에서 `ImageFolder` 기반 데이터셋 로딩이 실패할 수 있습니다.
 
 ---
 

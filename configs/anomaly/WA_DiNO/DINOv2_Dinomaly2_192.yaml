@@ -1,0 +1,22 @@
+project_name: "Dinomaly2_DINOv2_01"
+
+anomaly:
+  method_name: "dinomaly2"
+
+method:
+  dinomaly2:
+    bottleneck_dim: 192
+    epochs: 1
+    lr: 0.0001
+    weight_decay: 0.0001
+
+train:
+  img_size: [518, 518]
+  batch_size: 128
+  gpu_augment: true
+  num_workers: 24
+  persistent_workers: true
+  prefetch_factor: 1
+  # 
+  profile_transforms: false
+  profile_steps: false

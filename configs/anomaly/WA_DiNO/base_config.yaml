@@ -1,0 +1,51 @@
+project_name: "PatchCore_DINOv2_Base"
+
+task:
+  type: "anomaly_detection"
+  name: "PATCHCORE"
+
+data:
+  train_normal_dir: "C:\\IMG_DATA\\WA_DiNO\\TRAIN"
+  test_dir: "C:\\IMG_DATA\\WA_DiNO\\TEST"
+  mask_dir: null
+  save_dir: "D:\\Arch_Research\\models\\save"
+  model_dir: "D:\\Arch_Research\\models\\pretrained"
+
+model:
+  backbone_name: "vit_small_patch14_dinov2.lvd142m"
+  pretrained: "dino_small.bin"
+  freeze_backbone: true
+
+anomaly:
+  method_name: "patchcore"
+  normal_class: "OK"
+  threshold:
+    policy: "tpr95"
+    target_tpr: 0.95
+
+method:
+  patchcore:
+    feature_layers: ["blocks.8", "blocks.11"]
+    coreset_sampling_ratio: 0.1
+    knn_k: 9
+    score_aggregation: "max"
+    max_memory_bank_patches: 50000
+  dinomaly2:
+    feature_layers: ["blocks.8", "blocks.11"]
+    bottleneck_dim: 256
+    dropout: 0.1
+    epochs: 5
+    lr: 0.0001
+    weight_decay: 0.0001
+    score_aggregation: "max"
+
+train:
+  img_size: [518, 518]
+  batch_size: 32
+  val_ratio: 0.1
+  gpu_augment: false
+  num_workers: 24
+  persistent_workers: true
+  prefetch_factor: 2
+  seed: 42
+  profile_transforms: true

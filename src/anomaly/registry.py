@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from importlib import import_module
-from typing import Any, Dict
+from typing import Any, Mapping
 
 from src.config_loader import ConfigError
+from src.anomaly.contracts import AnomalyMethodRunner
 
 """이상치 탐지 task의 method registry 모듈.
 
@@ -16,14 +17,13 @@ from src.config_loader import ConfigError
 - 설정 파일만 보고 어떤 실험을 돌릴지 파악할 수 있다.
 """
 
-AnomalyRunner = Callable[..., Dict[str, Any]]
-
 METHOD_REGISTRY: dict[str, str] = {
-    "patchcore": "src.anomaly.methods.patchcore:run",
+    "patchcore": "src.anomaly.methods.patchcore_runner:run",
+    "dinomaly2": "src.anomaly.methods.dinomaly2_runner:run",
 }
 
 
-def get_anomaly_method(cfg: Mapping[str, Any]) -> AnomalyRunner:
+def get_anomaly_method(cfg: Mapping[str, Any]) -> AnomalyMethodRunner:
     """설정에서 method_name을 읽어 실제 실행 함수를 반환한다.
 
     예시:
@@ -31,7 +31,7 @@ def get_anomaly_method(cfg: Mapping[str, Any]) -> AnomalyRunner:
       method_name: patchcore
 
     위 설정이 들어오면 METHOD_REGISTRY["patchcore"] 값을 찾고,
-    src.anomaly.methods.patchcore 모듈의 run() 함수를 import해 반환한다.
+    src.anomaly.methods.patchcore_runner 모듈의 run() 함수를 import해 반환한다.
     """
     anomaly_cfg = cfg.get("anomaly")
     if not isinstance(anomaly_cfg, Mapping):

@@ -4,6 +4,7 @@ from time import perf_counter
 from typing import Any, Dict, Mapping
 
 from src.anomaly.registry import get_anomaly_method
+from src.anomaly.result_schema import validate_anomaly_result
 
 """anomaly task의 공통 엔진 모듈.
 
@@ -27,8 +28,7 @@ def run_anomaly_experiment(cfg: Mapping[str, Any], *, save_artifacts: bool = Tru
     """
     started = perf_counter()
     runner = get_anomaly_method(cfg)
-    result = runner(cfg, save_artifacts=save_artifacts)
-    result.setdefault("task_type", "anomaly_detection")
+    result = validate_anomaly_result(runner(cfg, save_artifacts=save_artifacts))
     result.setdefault("elapsed_sec", round(perf_counter() - started, 3))
     return result
 

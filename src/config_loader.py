@@ -302,34 +302,99 @@ def _validate_anomaly_config(
     anomaly = _ensure_mapping(cfg["anomaly"], "anomaly")
     _require_keys(anomaly, ("method_name",), where="anomaly")
 
+    method_root = cfg.get("method", {})
+    if method_root is None:
+        method_root = {}
+    if not isinstance(method_root, Mapping):
+        raise ConfigError("Config section must be a mapping", field="method")
+
     method_name = str(anomaly["method_name"]).strip().lower()
     if method_name == "patchcore":
+        patchcore_cfg = method_root.get("patchcore", {})
+        if patchcore_cfg is None:
+            patchcore_cfg = {}
+        if not isinstance(patchcore_cfg, Mapping):
+            raise ConfigError("method.patchcore must be a mapping", field="method.patchcore")
+
+        normalized_patchcore_cfg = dict(patchcore_cfg)
+        for legacy_key in ("feature_layers", "coreset_sampling_ratio", "knn_k", "score_aggregation", "max_memory_bank_patches"):
+            if legacy_key not in normalized_patchcore_cfg and legacy_key in anomaly:
+                normalized_patchcore_cfg[legacy_key] = anomaly[legacy_key]
+
         _require_keys(
-            anomaly,
+            normalized_patchcore_cfg,
             ("feature_layers", "coreset_sampling_ratio", "knn_k"),
-            where="anomaly",
+            where="method.patchcore",
         )
 
-        feature_layers = anomaly["feature_layers"]
+        feature_layers = normalized_patchcore_cfg["feature_layers"]
         if not isinstance(feature_layers, list) or not feature_layers:
             raise ConfigError(
-                "anomaly.feature_layers must be a non-empty list",
-                field="anomaly.feature_layers",
+                "method.patchcore.feature_layers must be a non-empty list",
+                field="method.patchcore.feature_layers",
             )
 
-        coreset_sampling_ratio = float(anomaly["coreset_sampling_ratio"])
-        knn_k = int(anomaly["knn_k"])
+        coreset_sampling_ratio = float(normalized_patchcore_cfg["coreset_sampling_ratio"])
+        knn_k = int(normalized_patchcore_cfg["knn_k"])
         if not (0.0 < coreset_sampling_ratio <= 1.0):
             raise ConfigError(
-                "anomaly.coreset_sampling_ratio must be in (0, 1]",
-                field="anomaly.coreset_sampling_ratio",
+                "method.patchcore.coreset_sampling_ratio must be in (0, 1]",
+                field="method.patchcore.coreset_sampling_ratio",
                 details={"value": coreset_sampling_ratio},
             )
         if knn_k <= 0:
             raise ConfigError(
-                "anomaly.knn_k must be > 0",
-                field="anomaly.knn_k",
+                "method.patchcore.knn_k must be > 0",
+                field="method.patchcore.knn_k",
                 details={"value": knn_k},
+            )
+
+    if method_name == "dinomaly2":
+        dinomaly2_cfg = method_root.get("dinomaly2", {})
+        if dinomaly2_cfg is None:
+            dinomaly2_cfg = {}
+        if not isinstance(dinomaly2_cfg, Mapping):
+            raise ConfigError("method.dinomaly2 must be a mapping", field="method.dinomaly2")
+        _require_keys(
+            dinomaly2_cfg,
+            ("feature_layers", "bottleneck_dim", "epochs", "lr", "weight_decay", "score_aggregation"),
+            where="method.dinomaly2",
+        )
+        feature_layers = dinomaly2_cfg["feature_layers"]
+        if not isinstance(feature_layers, list) or not feature_layers:
+            raise ConfigError(
+                "method.dinomaly2.feature_layers must be a non-empty list",
+                field="method.dinomaly2.feature_layers",
+            )
+        if int(dinomaly2_cfg["bottleneck_dim"]) <= 0:
+            raise ConfigError(
+                "method.dinomaly2.bottleneck_dim must be > 0",
+                field="method.dinomaly2.bottleneck_dim",
+                details={"value": dinomaly2_cfg["bottleneck_dim"]},
+            )
+        if int(dinomaly2_cfg["epochs"]) <= 0:
+            raise ConfigError(
+                "method.dinomaly2.epochs must be > 0",
+                field="method.dinomaly2.epochs",
+                details={"value": dinomaly2_cfg["epochs"]},
+            )
+        if float(dinomaly2_cfg["lr"]) <= 0:
+            raise ConfigError(
+                "method.dinomaly2.lr must be > 0",
+                field="method.dinomaly2.lr",
+                details={"value": dinomaly2_cfg["lr"]},
+            )
+        if float(dinomaly2_cfg["weight_decay"]) < 0:
+            raise ConfigError(
+                "method.dinomaly2.weight_decay must be >= 0",
+                field="method.dinomaly2.weight_decay",
+                details={"value": dinomaly2_cfg["weight_decay"]},
+            )
+        if str(dinomaly2_cfg["score_aggregation"]).strip().lower() not in {"max", "mean"}:
+            raise ConfigError(
+                "method.dinomaly2.score_aggregation must be 'max' or 'mean'",
+                field="method.dinomaly2.score_aggregation",
+                details={"value": dinomaly2_cfg["score_aggregation"]},
             )
 
     if train:

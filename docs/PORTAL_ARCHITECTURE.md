@@ -68,7 +68,10 @@ anomaly도 동일한 패턴으로 구성한다.
 
 - src/anomaly/engine.py
 - src/anomaly/registry.py
-- src/anomaly/methods/patchcore.py
+- src/anomaly/image_loaders.py
+- src/anomaly/image_level_metrics.py
+- src/anomaly/methods/patchcore_runner.py
+- src/anomaly/methods/dinomaly2_runner.py
 
 method_name을 registry에서 읽어서 해당 runner를 선택한다.
 

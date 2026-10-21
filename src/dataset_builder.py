@@ -12,8 +12,10 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from torchvision.transforms import functional as TF
 from torchvision.transforms.functional import InterpolationMode
+from torchvision.transforms import v2
 
 from src.config_loader import ConfigError
+from src.profiling.transform_timing import timed_transform_pipeline
 
 """이미지 데이터셋 변환과 DataLoader 생성 모듈.
 
@@ -38,18 +40,15 @@ except Exception:
 class StackGrayToRGB:
     """입력 이미지를 항상 3채널 RGB 형태로 정규화한다.
 
-    공정 이미지가 8bit 1채널일 때는 채널을 3번 복제해 RGB로 맞추고,
-    이미 RGB인 경우에는 그대로 통과시킨다.
+    grayscale 계열 이미지는 PIL의 `convert("RGB")`만 사용해서
+    불필요한 NumPy 스택/재인코딩을 피한다.
     """
 
     def __call__(self, img: Image.Image) -> Image.Image:
         if img.mode == "RGB":
             return img
         if img.mode in {"L", "I;16", "I", "F"}:
-            gray = img.convert("L")
-            arr = np.array(gray, dtype=np.uint8)
-            rgb = np.stack([arr, arr, arr], axis=-1)
-            return Image.fromarray(rgb, mode="RGB")
+            return img.convert("RGB")
         return img.convert("RGB")
 
 
@@ -149,7 +148,27 @@ class AddGaussianNoise:
         return tensor + noise
 
 
-def img_transform(size: int, mode: str = "train") -> transforms.Compose:
+def build_base_image_transform(size: int, *, mode: str = "train", profile: bool = False) -> v2.Compose:
+    """CPU worker 단계에서 수행할 최소 이미지 변환을 구성한다.
+
+    이 경로는 PIL/numpy/OpenCV 기반 무거운 augmentation을 제거하고,
+    decode 이후 resize와 tensor 변환까지만 담당한다.
+    """
+    if mode not in {"train", "eval"}:
+        raise ConfigError("mode must be 'train' or 'eval'", field="mode", details={"value": mode})
+
+    steps = [
+        StackGrayToRGB(),
+        v2.Resize((size, size), antialias=True),
+        v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
+    ]
+    if profile:
+        steps = timed_transform_pipeline(steps, enabled=True)
+    return v2.Compose(steps)
+
+
+def img_transform(size: int, mode: str = "train", *, profile: bool = False) -> transforms.Compose:
     """SURFACE 데이터셋용 transform.
 
     - 8bit 1ch 이미지는 3ch로 스태킹해 RGB 파이프라인으로 통일
@@ -157,53 +176,52 @@ def img_transform(size: int, mode: str = "train") -> transforms.Compose:
     - mode=eval에서는 resize + normalize만 적용
     """
     if mode == "train":
-        transform = transforms.Compose(
-            [
-                StackGrayToRGB(),
-                transforms.Resize((size, size)),
-                transforms.RandomHorizontalFlip(p=0.3),
-                transforms.RandomVerticalFlip(p=0.3),
-                RandomDownscaleRestore(p=0.25, scale=(0.9, 1.0)),
-                transforms.RandomApply(
-                    [transforms.ColorJitter(brightness=0.10, contrast=0.12)],
-                    p=0.3,
-                ),
-                transforms.RandomApply(
-                    [transforms.RandomAdjustSharpness(sharpness_factor=1.3, p=1.0)],
-                    p=0.12,
-                ),
-                transforms.RandomApply(
-                    [
-                        transforms.RandomChoice(
-                            [
-                                transforms.RandomAutocontrast(p=1.0),
-                                transforms.RandomEqualize(p=1.0),
-                            ]
-                        )
-                    ],
-                    p=0.2,
-                ),
-                RandomCLAHE(p=0.15, clip_limit=(1.2, 2.2), tile_grid_size=(8, 8)),
-                RandomJPEGCompression(p=0.1, quality=(75, 95)),
-                transforms.RandomApply(
-                    [transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 0.6))],
-                    p=0.08,
-                ),
-                transforms.ToTensor(),
-                AddGaussianNoise(p=0.08, mean=0.0, std=0.006),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ]
-        )
+        steps = [
+            StackGrayToRGB(),
+            transforms.Resize((size, size)),
+            transforms.RandomHorizontalFlip(p=0.3),
+            transforms.RandomVerticalFlip(p=0.3),
+            RandomDownscaleRestore(p=0.25, scale=(0.9, 1.0)),
+            transforms.RandomApply(
+                [transforms.ColorJitter(brightness=0.10, contrast=0.12)],
+                p=0.3,
+            ),
+            transforms.RandomApply(
+                [transforms.RandomAdjustSharpness(sharpness_factor=1.3, p=1.0)],
+                p=0.12,
+            ),
+            transforms.RandomApply(
+                [
+                    transforms.RandomChoice(
+                        [
+                            transforms.RandomAutocontrast(p=1.0),
+                            transforms.RandomEqualize(p=1.0),
+                        ]
+                    )
+                ],
+                p=0.2,
+            ),
+            RandomCLAHE(p=0.15, clip_limit=(1.2, 2.2), tile_grid_size=(8, 8)),
+            RandomJPEGCompression(p=0.1, quality=(75, 95)),
+            transforms.RandomApply(
+                [transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 0.6))],
+                p=0.08,
+            ),
+            transforms.ToTensor(),
+            AddGaussianNoise(p=0.08, mean=0.0, std=0.006),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
     else:
-        transform = transforms.Compose(
-            [
-                StackGrayToRGB(),
-                transforms.Resize((size, size)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ]
-        )
-    return transform
+        steps = [
+            StackGrayToRGB(),
+            transforms.Resize((size, size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+
+    if profile:
+        steps = timed_transform_pipeline(steps, enabled=True)
+    return transforms.Compose(steps)
 
 
 def build_train_val_loaders(cfg: Mapping[str, Any]) -> Tuple[DataLoader, DataLoader, Dict[int, str]]:
@@ -232,8 +250,15 @@ def build_train_val_loaders(cfg: Mapping[str, Any]) -> Tuple[DataLoader, DataLoa
     else:
         raise ConfigError("train.img_size must be int or [H,W]", field="train.img_size", details={"value": img_size})
 
-    train_ds = datasets.ImageFolder(str(train_dir), transform=img_transform(size=size, mode="train"))
-    val_ds = datasets.ImageFolder(str(test_dir), transform=img_transform(size=size, mode="eval"))
+    profile_transforms = bool(train_cfg.get("profile_transforms", False))
+    train_ds = datasets.ImageFolder(
+        str(train_dir),
+        transform=img_transform(size=size, mode="train", profile=profile_transforms),
+    )
+    val_ds = datasets.ImageFolder(
+        str(test_dir),
+        transform=img_transform(size=size, mode="eval", profile=profile_transforms),
+    )
 
     # 클래스 이름 불일치가 있으면 지표 해석이 틀어지므로 여기서 즉시 차단한다.
     if train_ds.classes != val_ds.classes:
@@ -288,7 +313,11 @@ def build_eval_loader(cfg: Mapping[str, Any]) -> Tuple[DataLoader, Dict[int, str
     else:
         raise ConfigError("train.img_size must be int or [H,W]", field="train.img_size", details={"value": img_size})
 
-    ds = datasets.ImageFolder(str(test_dir), transform=img_transform(size=size, mode="eval"))
+    profile_transforms = bool(train_cfg.get("profile_transforms", False))
+    ds = datasets.ImageFolder(
+        str(test_dir),
+        transform=img_transform(size=size, mode="eval", profile=profile_transforms),
+    )
 
     batch_size = int(train_cfg.get("batch_size", 32))
     num_workers = int(train_cfg.get("num_workers", 4))
