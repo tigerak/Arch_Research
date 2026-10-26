@@ -18,8 +18,8 @@ RUN_MODE = "train"  # "train" | "eval"
 # 방법 1) config group + task 이름만 지정하면 자동으로 아래 경로를 사용한다.
 # - base:   configs/<CONFIG_GROUP>/<TASK_NAME>/base_config.yaml
 # - custom: configs/<CONFIG_GROUP>/<TASK_NAME>/*.yaml
-CONFIG_GROUP = "anomaly"  # "classifier" | "anomaly"
-TASK_NAME = "WA_DiNO"     # "WA_DiNO" | "TAPING_DiNO"
+CONFIG_GROUP = "classifier"  # "classifier" | "anomaly"
+TASK_NAME = "SURFACE_ANODE_DiNO"     # "WA_DiNO" | "TAPING_DiNO" | "SURFACE_ANODE_DiNO"
 # 방법 2) base config를 직접 지정한다. (지정 시 TASK_NAME보다 우선)
 BASE_CONFIG_PATH = None  # Path("configs/classifier/TAPING_DiNO/base_config.yaml")
 

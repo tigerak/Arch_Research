@@ -82,6 +82,9 @@ def evaluate_checkpoint(
     )
 
     class_rows, macro_recall, macro_f1 = _class_metrics_from_confusion(conf, idx_to_class)
+    collapsed_labels, collapsed_conf, collapsed_class_rows, collapsed_macro_f1, collapsed_acc, upper_triangle_errors = _collapsed_metrics_from_confusion(
+        conf, [idx_to_class[i] for i in sorted(idx_to_class.keys())]
+    )
 
     result = {
         "checkpoint_path": str(ckpt_path),
@@ -94,6 +97,12 @@ def evaluate_checkpoint(
         "per_class": class_rows,
         "labels": [idx_to_class[i] for i in sorted(idx_to_class.keys())],
         "n_classes": int(train_cfg.get("n_classes", len(idx_to_class))),
+        "collapsed_labels": collapsed_labels,
+        "collapsed_confusion_matrix": collapsed_conf.tolist(),
+        "collapsed_per_class": collapsed_class_rows,
+        "collapsed_accuracy": float(collapsed_acc),
+        "collapsed_macro_f1": float(collapsed_macro_f1),
+        "collapsed_upper_triangle_errors": int(upper_triangle_errors),
     }
 
     _save_evaluation_outputs(result)
@@ -195,6 +204,74 @@ def _class_metrics_from_confusion(
     return rows, macro_recall, macro_f1
 
 
+def _collapse_label_name(label: str) -> str:
+    """이름 뒤의 번호 suffix를 제거해 같은 계열 class를 합친다.
+
+    예: CRACK_1 -> CRACK, CRACK_FOIL_2 -> CRACK_FOIL, PROTRUSION_3 -> PROTRUSION
+    """
+    text = str(label).strip()
+    if not text:
+        return text
+    collapsed = re.sub(r"(?:_\d+)+$", "", text)
+    return collapsed if collapsed else text
+
+
+def _collapsed_metrics_from_confusion(
+    conf: torch.Tensor,
+    labels: List[str],
+) -> Tuple[List[str], torch.Tensor, List[Dict[str, Any]], float, float, int]:
+    """동일 계열 클래스명을 묶어 collapsed confusion matrix와 지표를 계산한다."""
+    group_to_idx: Dict[str, int] = {}
+    ordered_labels: List[str] = []
+    for label in labels:
+        key = _collapse_label_name(label)
+        if key not in group_to_idx:
+            group_to_idx[key] = len(ordered_labels)
+            ordered_labels.append(key)
+
+    collapsed = torch.zeros((len(ordered_labels), len(ordered_labels)), dtype=torch.long)
+    for i, label_i in enumerate(labels):
+        g_i = group_to_idx[_collapse_label_name(label_i)]
+        for j, label_j in enumerate(labels):
+            g_j = group_to_idx[_collapse_label_name(label_j)]
+            collapsed[g_i, g_j] += int(conf[i, j].item())
+
+    per_class: List[Dict[str, Any]] = []
+    recall_values: List[float] = []
+    f1_values: List[float] = []
+    for i in range(collapsed.shape[0]):
+        tp = float(collapsed[i, i].item())
+        fp = float(collapsed[:, i].sum().item() - tp)
+        fn = float(collapsed[i, :].sum().item() - tp)
+        support = int(collapsed[i, :].sum().item())
+
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = (2.0 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+
+        per_class.append(
+            {
+                "class_index": i,
+                "class_name": ordered_labels[i],
+                "precision": precision,
+                "recall": recall,
+                "f1": f1,
+                "support": support,
+            }
+        )
+        recall_values.append(recall)
+        f1_values.append(f1)
+
+    upper_triangle_errors = int(
+        sum(int(collapsed[i, j].item()) for i in range(collapsed.shape[0]) for j in range(i + 1, collapsed.shape[1]))
+    )
+    total = int(collapsed.sum().item())
+    collapsed_accuracy = float(collapsed.diag().sum().item() / total) if total > 0 else 0.0
+    collapsed_macro_f1 = sum(f1_values) / max(1, len(f1_values))
+
+    return ordered_labels, collapsed, per_class, collapsed_macro_f1, collapsed_accuracy, upper_triangle_errors
+
+
 def print_evaluation_report(result: Mapping[str, Any]) -> None:
     """평가 결과를 콘솔에서 즉시 확인하기 좋은 형태로 출력한다."""
     print("[Eval] ===============================")
@@ -218,6 +295,22 @@ def print_evaluation_report(result: Mapping[str, Any]) -> None:
             f"F1={row['f1']:.6f} "
             f"N={row['support']}"
         )
+
+    collapsed_labels = result.get("collapsed_labels", [])
+    collapsed_matrix = result.get("collapsed_confusion_matrix")
+    if collapsed_labels and collapsed_matrix:
+        print("[Eval] Custom Acc (Collapsed): {:.4f}".format(result.get("collapsed_accuracy", 0.0)))
+        print("[Eval] Custom F1 (Macro, Collapsed): {:.4f}".format(result.get("collapsed_macro_f1", 0.0)))
+        print("[Eval] Custom Upper-Triangle Errors (Collapsed CM): {}".format(result.get("collapsed_upper_triangle_errors", 0)))
+        print("[Eval] [ Custom Collapsed Confusion Matrix ]")
+        col_width = max(len(str(v)) for row in collapsed_matrix for v in row)
+        col_width = max(col_width, 8)
+        header = " " * 14 + "  ".join(f"{label:<{col_width}}" for label in collapsed_labels)
+        print(header)
+        for i, label in enumerate(collapsed_labels):
+            row = " ".join(f"{v:>{col_width}}" for v in collapsed_matrix[i])
+            print(f"{label:<14} {row}")
+
     print("[Eval] ===============================")
 
 

@@ -1,0 +1,11 @@
+project_name: "Focal_FA1"
+
+model:
+  token_fusion: "cls_only" # cls_only | attn | concat | wt_concat | sum05
+  
+train:
+
+  # Focal loss 설정
+  loss_name: "focal"
+  focal_gamma: 2.0
+  focal_alpha: 1.0

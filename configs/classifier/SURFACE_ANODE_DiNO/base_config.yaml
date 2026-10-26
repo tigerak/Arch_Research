@@ -1,0 +1,46 @@
+project_name: "SURFACE_ANODE_DiNO_BaseLine"
+
+task:
+  type: "classification"
+  name: "SURFACE_ANODE_DiNO"
+
+data:
+  train_dir: "D:\\Arch_Research\\IMG_DATA\\SURFACE_ANODE\\TRAIN"
+  test_dir: "D:\\Arch_Research\\IMG_DATA\\SURFACE_ANODE\\TEST"
+  save_dir: "D:\\Arch_Research\\models\\save"
+  model_dir: "D:\\Arch_Research\\models\\pretrained"
+
+model:
+  model_name: "vit_small_patch14_dinov2.lvd142m"
+  pretrained: "dino_small.bin"
+  head_type: "transformer" # transformer | linear | general_gem | effnet_gem | backbone
+  freeze_backbone: True
+
+train:
+  lr: 0.0005
+  weight_decay: 0.001
+  scheduler: "CosineAnnealingLR"
+  eta_min: 1.0e-06
+
+  max_epoch: 100
+  lr: 0.0005
+  scheduler: "CosineAnnealingLR" # step | CosineAnnealingLR | onecycle
+  weight_decay: 0.0001
+
+  # 체크포인트 저장 정책
+  save_warmup_epochs: 20                        # 처음 20 epoch은 저장하지 않음
+  save_compare_metrics: ["val_f1", "val_loss"]
+  save_compare_modes: ["max", "min"]
+  save_top_k: 10
+
+  img_size: [518, 518]
+  n_classes: 12
+  labels: ['CRACK_1', 'CRACK_2', 'CRACK_FOIL_1', 'CRACK_FOIL_2', 'CRATER_1', 'CRATER_2', 'DEBRIS', 'PROTRUSION_1', 'PROTRUSION_2','PROTRUSION_3', 'PROTRUSION_4', 'SCRATCH_TINY']
+
+  batch_size: 128
+  accumulation_steps: 1
+  num_workers: 24
+  persistent_workers: true
+  prefetch_factor: 1
+
+  seed: 42
