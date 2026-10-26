@@ -48,6 +48,7 @@ def run_dinomaly2(cfg: Mapping[str, Any], *, save_artifacts: bool = True) -> Dic
         image_size_override=image_size,
         use_gpu_augment=use_gpu_augment,
     )
+    save_root = resolve_save_root(cfg)
     train_tensor_transform = build_tensor_gpu_augmentation(mode="train") if use_gpu_augment else None
     eval_tensor_transform = build_tensor_gpu_augmentation(mode="eval") if use_gpu_augment else None
     profile_steps = bool(train_cfg.get("profile_steps", False)) or bool(train_cfg.get("profile_transforms", False))
@@ -68,16 +69,21 @@ def run_dinomaly2(cfg: Mapping[str, Any], *, save_artifacts: bool = True) -> Dic
         normal_class=normal_class,
         aggregation=dinomaly2_cfg.score_aggregation,
         tensor_transform=eval_tensor_transform,
+        collect_paths=False,
     )
     val_threshold_summary = summarize_image_level_scores(val_labels, val_scores, threshold_cfg=get_threshold_config(cfg))
 
-    scores, labels, paths, class_names = score_dinomaly2_dataset(
+    predictions_path = save_root / "dinomaly2_predictions.csv" if save_artifacts else None
+    scores, labels, _, _ = score_dinomaly2_dataset(
         model,
         test_loader,
         idx_to_class=idx_to_class,
         normal_class=normal_class,
         aggregation=dinomaly2_cfg.score_aggregation,
         tensor_transform=eval_tensor_transform,
+        threshold=val_threshold_summary["threshold"],
+        prediction_csv_path=str(predictions_path) if predictions_path is not None else None,
+        collect_paths=False,
     )
     score_summary = summarize_image_level_scores(
         labels,
@@ -85,7 +91,6 @@ def run_dinomaly2(cfg: Mapping[str, Any], *, save_artifacts: bool = True) -> Dic
         threshold_cfg=get_threshold_config(cfg),
         threshold=val_threshold_summary["threshold"],
     )
-    save_root = resolve_save_root(cfg)
     artifacts: Dict[str, str] = {}
     if save_artifacts:
         checkpoint_path = save_root / "dinomaly2_student_heads.pt"
@@ -104,15 +109,6 @@ def run_dinomaly2(cfg: Mapping[str, Any], *, save_artifacts: bool = True) -> Dic
         artifacts["history_json"] = str(history_path)
 
         predictions_path = save_root / "dinomaly2_predictions.csv"
-        save_image_score_predictions_csv(
-            predictions_path,
-            paths,
-            class_names,
-            labels,
-            scores,
-            score_summary["predictions"],
-            score_summary["threshold"],
-        )
         artifacts["predictions_csv"] = str(predictions_path)
 
         metrics_path = save_root / "dinomaly2_metrics.json"

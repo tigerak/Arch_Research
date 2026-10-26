@@ -5,8 +5,9 @@ task:
   name: "PATCHCORE"
 
 data:
-  train_normal_dir: "C:\\IMG_DATA\\WA_DiNO\\TRAIN"
-  test_dir: "C:\\IMG_DATA\\WA_DiNO\\TEST"
+  train_normal_dir: "D:\\Arch_Research\\IMG_DATA\\WA_DiNO\\TRAIN"
+  val_dir: "D:\\Arch_Research\\IMG_DATA\\WA_DiNO\\VAL"
+  test_dir: "D:\\Arch_Research\\IMG_DATA\\WA_DiNO\\TEST"
   mask_dir: null
   save_dir: "D:\\Arch_Research\\models\\save"
   model_dir: "D:\\Arch_Research\\models\\pretrained"
@@ -19,6 +20,7 @@ model:
 anomaly:
   method_name: "patchcore"
   normal_class: "OK"
+  val_ratio: 0.2
   threshold:
     policy: "tpr95"
     target_tpr: 0.95

@@ -63,6 +63,7 @@ def run_patchcore(cfg: Mapping[str, Any], *, save_artifacts: bool = True) -> Dic
         cfg,
         image_size_override=image_size,
     )
+    save_root = resolve_save_root(cfg)
     max_memory_bank_patches = int(method_cfg.get("max_memory_bank_patches", 50000))
     if max_memory_bank_patches <= 0:
         raise ConfigError(
@@ -84,16 +85,21 @@ def run_patchcore(cfg: Mapping[str, Any], *, save_artifacts: bool = True) -> Dic
         loader=val_loader,
         idx_to_class=idx_to_class,
         normal_class=normal_class,
+        collect_paths=False,
     )
     val_threshold_summary = summarize_image_level_scores(val_labels, val_scores, threshold_cfg=get_threshold_config(cfg))
 
-    scores, labels, paths, class_names = score_patchcore_dataset(
+    predictions_path = save_root / "patchcore_predictions.csv" if save_artifacts else None
+    scores, labels, _, _ = score_patchcore_dataset(
         extractor,
         memory_bank,
         knn_k=patchcore_cfg.knn_k,
         loader=test_loader,
         idx_to_class=idx_to_class,
         normal_class=normal_class,
+        threshold=val_threshold_summary["threshold"],
+        prediction_csv_path=str(predictions_path) if predictions_path is not None else None,
+        collect_paths=False,
     )
 
     score_summary = summarize_image_level_scores(
@@ -103,8 +109,6 @@ def run_patchcore(cfg: Mapping[str, Any], *, save_artifacts: bool = True) -> Dic
         threshold=val_threshold_summary["threshold"],
     )
 
-    save_root = resolve_save_root(cfg)
-
     artifacts: Dict[str, str] = {}
     if save_artifacts:
         memory_path = save_root / "patchcore_memory_bank.pt"
@@ -112,15 +116,6 @@ def run_patchcore(cfg: Mapping[str, Any], *, save_artifacts: bool = True) -> Dic
         artifacts["memory_bank"] = str(memory_path)
 
         predictions_path = save_root / "patchcore_predictions.csv"
-        save_image_score_predictions_csv(
-            predictions_path,
-            paths,
-            class_names,
-            labels,
-            scores,
-            score_summary["predictions"],
-            score_summary["threshold"],
-        )
         artifacts["predictions_csv"] = str(predictions_path)
 
         metrics_path = save_root / "patchcore_metrics.json"

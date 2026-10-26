@@ -6,7 +6,7 @@ anomaly:
 method:
   dinomaly2:
     bottleneck_dim: 192
-    epochs: 1
+    epochs: 10
     lr: 0.0001
     weight_decay: 0.0001
 

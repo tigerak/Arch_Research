@@ -98,25 +98,53 @@ def score_patchcore_dataset(
     loader: DataLoader,
     idx_to_class: Mapping[int, str],
     normal_class: str,
+    threshold: float | None = None,
+    prediction_csv_path: str | None = None,
+    collect_paths: bool = True,
 ) -> tuple[list[float], list[int], list[str], list[str]]:
     scores: list[float] = []
     labels: list[int] = []
     paths: list[str] = []
     class_names: list[str] = []
 
-    memory_bank = memory_bank.to(extractor.device)
-    iterable = loader if tqdm is None else tqdm(loader, desc="PatchCore Eval", leave=False)
-    for batch in iterable:
-        images, class_idx, batch_paths = batch
-        embedded = extractor.forward_tokens(images)
-        batch_scores = compute_patch_scores(embedded, memory_bank, knn_k)
+    csv_writer = None
+    csv_file = None
+    if prediction_csv_path is not None:
+        import csv
+        csv_file = open(prediction_csv_path, "w", encoding="utf-8", newline="")
+        csv_writer = csv.DictWriter(csv_file, fieldnames=["image_path", "class_name", "binary_label", "score", "prediction", "threshold"])
+        csv_writer.writeheader()
 
-        for score, target, path in zip(batch_scores.detach().cpu().tolist(), class_idx.tolist(), batch_paths):
-            class_name = idx_to_class[int(target)]
-            labels.append(0 if class_name == normal_class else 1)
-            scores.append(float(score))
-            paths.append(str(path))
-            class_names.append(class_name)
+    memory_bank = memory_bank.to(extractor.device)
+    try:
+        iterable = loader if tqdm is None else tqdm(loader, desc="PatchCore Eval", leave=False)
+        for batch in iterable:
+            images, class_idx, batch_paths = batch
+            embedded = extractor.forward_tokens(images)
+            batch_scores = compute_patch_scores(embedded, memory_bank, knn_k)
+
+            for score, target, path in zip(batch_scores.detach().cpu().tolist(), class_idx.tolist(), batch_paths):
+                class_name = idx_to_class[int(target)]
+                label = 0 if class_name == normal_class else 1
+                score_value = float(score)
+                labels.append(label)
+                scores.append(score_value)
+                if collect_paths:
+                    paths.append(str(path))
+                    class_names.append(class_name)
+                if csv_writer is not None:
+                    prediction = 1 if threshold is not None and score_value >= threshold else 0
+                    csv_writer.writerow({
+                        "image_path": str(path),
+                        "class_name": class_name,
+                        "binary_label": int(label),
+                        "score": score_value,
+                        "prediction": int(prediction),
+                        "threshold": float(threshold) if threshold is not None else 0.0,
+                    })
+    finally:
+        if csv_file is not None:
+            csv_file.close()
 
     return scores, labels, paths, class_names
 

@@ -32,8 +32,12 @@ class SubsetWithPaths(torch.utils.data.Dataset):
 
     def __getitem__(self, index: int):
         sample_index = self.indices[index]
-        sample, target = self.dataset[sample_index]
-        path, _ = self.dataset.samples[sample_index]
+        item = self.dataset[sample_index]
+        if len(item) == 3:
+            sample, target, path = item
+        else:
+            sample, target = item
+            path, _ = self.dataset.samples[sample_index]
         return sample, target, path
 
 
@@ -43,13 +47,23 @@ def build_image_anomaly_loaders(
     image_size_override: int | None = None,
     use_gpu_augment: bool = False,
 ) -> Tuple[DataLoader, DataLoader, DataLoader, Dict[int, str], str]:
-    """이미지 기반 anomaly method용 train/val/test DataLoader를 생성한다."""
+    """이미지 기반 anomaly method용 train/val/test DataLoader를 생성한다.
+
+    동작 방식:
+    - train_normal_dir: 정상 학습 데이터
+    - val_dir: 별도 검증 데이터. 있으면 이걸 우선 사용
+    - test_dir: 최종 평가용 데이터
+
+    val_dir가 없으면 기존 방식대로 train_normal_dir에서 val_ratio 비율만큼 자동 분리한다.
+    """
     data_cfg = _section(cfg, "data")
     train_cfg = _section(cfg, "train")
     anomaly_cfg = _section(cfg, "anomaly")
 
     train_normal_dir = Path(str(data_cfg.get("train_normal_dir", "")))
+    val_dir = Path(str(data_cfg.get("val_dir", ""))) if str(data_cfg.get("val_dir", "")).strip() else None
     test_dir = Path(str(data_cfg.get("test_dir", "")))
+
     if not train_normal_dir.exists():
         raise ConfigError("Normal training directory not found", field="data.train_normal_dir", file_path=train_normal_dir)
     if not test_dir.exists():
@@ -75,29 +89,33 @@ def build_image_anomaly_loaders(
         train_transform = img_transform(size=size, mode="train", profile=profile_transforms)
         test_transform = img_transform(size=size, mode="eval", profile=profile_transforms)
 
-    full_train_ds = datasets.ImageFolder(str(train_normal_dir), transform=train_transform)
+    full_train_ds = ImageFolderWithPaths(str(train_normal_dir), transform=train_transform)
     test_ds = ImageFolderWithPaths(str(test_dir), transform=test_transform)
 
-    val_ratio = float(train_cfg.get("val_ratio", train_cfg.get("validation_ratio", 0.1)))
-    if not 0.0 < val_ratio < 1.0:
-        raise ConfigError("train.val_ratio must be between 0 and 1", field="train.val_ratio", details={"value": val_ratio})
+    if val_dir is not None and val_dir.exists():
+        val_ds = ImageFolderWithPaths(str(val_dir), transform=test_transform)
+        train_ds = ImageFolderWithPaths(str(train_normal_dir), transform=train_transform)
+    else:
+        val_ratio = float(train_cfg.get("val_ratio", train_cfg.get("validation_ratio", 0.1)))
+        if not 0.0 < val_ratio < 1.0:
+            raise ConfigError("train.val_ratio must be between 0 and 1", field="train.val_ratio", details={"value": val_ratio})
 
-    if len(full_train_ds) == 0:
-        raise ConfigError("Normal training directory is empty", field="data.train_normal_dir")
+        if len(full_train_ds) == 0:
+            raise ConfigError("Normal training directory is empty", field="data.train_normal_dir")
 
-    generator = torch.Generator().manual_seed(int(train_cfg.get("seed", 42)))
-    train_indices = torch.randperm(len(full_train_ds), generator=generator).tolist()
-    val_count = max(1, int(round(len(train_indices) * val_ratio))) if len(train_indices) > 1 else 0
-    val_count = min(val_count, len(train_indices) - 1)
-    val_indices = train_indices[:val_count]
-    train_indices = train_indices[val_count:]
+        generator = torch.Generator().manual_seed(int(train_cfg.get("seed", 42)))
+        train_indices = torch.randperm(len(full_train_ds), generator=generator).tolist()
+        val_count = max(1, int(round(len(train_indices) * val_ratio))) if len(train_indices) > 1 else 0
+        val_count = min(val_count, len(train_indices) - 1)
+        val_indices = train_indices[:val_count]
+        train_indices = train_indices[val_count:]
 
-    train_ds = SubsetWithPaths(full_train_ds, train_indices)
-    val_ds = SubsetWithPaths(full_train_ds, val_indices)
+        train_ds = SubsetWithPaths(full_train_ds, train_indices)
+        val_ds = SubsetWithPaths(full_train_ds, val_indices)
 
     batch_size = int(train_cfg.get("batch_size", 32))
     num_workers = int(train_cfg.get("num_workers", 4))
-    persistent_workers = bool(train_cfg.get("persistent_workers", True)) and num_workers > 0
+    persistent_workers = bool(train_cfg.get("persistent_workers", False)) and num_workers > 0
     prefetch_factor = int(train_cfg.get("prefetch_factor", 2)) if num_workers > 0 else None
 
     train_loader = DataLoader(
