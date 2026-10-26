@@ -236,40 +236,4 @@ def score_dinomaly2_dataset(
         if csv_file is not None:
             csv_file.close()
 
-            fieldnames=["image_path", "class_name", "binary_label", "score", "prediction", "threshold"],
-        )
-        csv_writer.writeheader()
-
-    try:
-        iterable = loader if tqdm is None else tqdm(loader, desc="Dinomaly2 Eval", leave=False)
-        for images, class_idx, batch_paths in iterable:
-            images = images.to(model.device, non_blocking=True)
-            if tensor_transform is not None:
-                images = tensor_transform(images)
-            batch_scores = model.score_images(images, aggregation=aggregation)
-            for score, target, path in zip(batch_scores.detach().cpu().tolist(), class_idx.tolist(), batch_paths):
-                class_name = idx_to_class[int(target)]
-                label = 0 if class_name == normal_class else 1
-                score_value = float(score)
-                labels.append(label)
-                scores.append(score_value)
-                if collect_paths:
-                    paths.append(str(path))
-                    class_names.append(class_name)
-                if csv_writer is not None:
-                    prediction = 1 if threshold is not None and score_value >= threshold else 0
-                    csv_writer.writerow(
-                        {
-                            "image_path": str(path),
-                            "class_name": class_name,
-                            "binary_label": int(label),
-                            "score": score_value,
-                            "prediction": int(prediction),
-                            "threshold": float(threshold) if threshold is not None else 0.0,
-                        }
-                    )
-    finally:
-        if csv_file is not None:
-            csv_file.close()
-
     return scores, labels, paths, class_names
